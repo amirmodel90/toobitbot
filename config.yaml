@@ -1,0 +1,52 @@
+# ToobitBot Configuration
+# ========================
+
+# Toobit API (REST + WebSocket)
+toobit:
+  base_url: "https://api.toobit.com"
+  ws_url: "wss://stream.toobit.com"
+  # api_key and secret_key are read from .env
+
+# Telegram Notifications
+telegram:
+  # bot_token and channel_id are read from .env
+  parse_mode: "HTML"
+
+# Scanner Configuration
+scanner:
+  timeframes: ["5m"]
+  min_leverage: 10              # Only symbols with leverage > 10
+  candles_limit: 250            # 200 (str4 LOOKBACK) + 50 scan window
+  monitor_candles_limit: 250    # For replay
+  scan_interval: 180            # Seconds (3 min)
+  max_workers: 8                # Thread pool for parallel scan
+  symbols_limit: 655            # Top N symbols by volume (matches min_leverage filter)
+
+# Strategies (risk percentages)
+# Risk values set by user: str1=5.25%, str2=7%, str3=3.75%, str4=5.75%
+strategies:
+  str1:
+    risk_pct: 0.0525
+    enabled: true
+  str2:
+    risk_pct: 0.0700
+    enabled: true
+  str3:
+    risk_pct: 0.0375
+    enabled: true
+  str4:
+    risk_pct: 0.0575
+    enabled: true
+
+# Position Management (mirrors signaltel)
+positions:
+  max_concurrent: 1             # Max 1 open position at a time
+  starting_equity: 100.0
+  fee_rate: 0.00045             # 0.045% per fill (entry + exits)
+  default_timeframe: "5m"
+  stale_ttl_hours: 48           # Auto-close unresolved signals
+
+# Logging
+logging:
+  level: "INFO"
+  file: "data/scanner.log"
