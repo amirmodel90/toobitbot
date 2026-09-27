@@ -49,15 +49,27 @@ def _monitor_symbol(sym, positions, client, bot_token, channel_id):
                 break
         
         if idx is None:
-            # STALE check: unresolved > 48 hours
-            if pos.get("signal_open_time") and \
-               time.time() * 1000 - pos["signal_open_time"] > 48 * 86400_000:
-                update_position(pos["signal_id"], {
-                    "state": "expired", "status": "EXPIRED",
-                    "exit_price": pos["entry"], "realized_pnl_usd": 0.0
-                })
-                print(f"[STALE] {pos['strategy']} {pos['symbol']} expired at 0R")
-            continue
+            # FALLBACK: signal candle may have fallen out of 250-window
+            # Fetch extended window (500 candles) for this symbol only
+            print(f"[FALLBACK] {pos['strategy']} {sym} signal not in 250-window, fetching 500...")
+            cds_extended = fetch_candles_with_ma_sync(client, sym, interval=tf, limit=500)
+            for i, c in enumerate(cds_extended):
+                if c["open_time"] == open_time:
+                    idx = i
+                    cds = cds_extended
+                    print(f"[FALLBACK OK] Found at index {idx} in extended window")
+                    break
+            
+            if idx is None:
+                # STALE check: unresolved > 48 hours
+                if pos.get("signal_open_time") and \
+                   time.time() * 1000 - pos["signal_open_time"] > 48 * 86400_000:
+                    update_position(pos["signal_id"], {
+                        "state": "expired", "status": "EXPIRED",
+                        "exit_price": pos["entry"], "realized_pnl_usd": 0.0
+                    })
+                    print(f"[STALE] {pos['strategy']} {pos['symbol']} expired at 0R")
+                continue
         
         stype = pos["type"]
         entry = pos["entry"]
