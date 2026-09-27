@@ -382,3 +382,78 @@ def _scan_symbol(mod, config, strategy_name, tf, interval, limit, monitor_limit,
     
     except Exception as e:
         print(f"[SCAN ERROR] {sym} {tf}: {e}")
+
+
+# ===== Async Version (for candle-aligned main loop) =====
+
+async def detect_new_signals_async(config, bot_token, channel_id, client, scanner_cfg):
+    """Async main detection loop - uses async batch fetch."""
+    # Get symbols with leverage > min_leverage (sync, uses requests)
+    symbols = get_symbols_with_leverage(client, scanner_cfg.get("min_leverage", 10))
+
+    # Get 24hr tickers for volume sorting (sync)
+    try:
+        tickers = client.get_24hr_ticker_sync()
+        ticker_map = {t["s"]: float(t.get("qv", 0)) for t in tickers}
+        for s in symbols:
+            s["quoteVolume"] = ticker_map.get(s["symbol"], 0)
+    except Exception as e:
+        print(f"[ERROR] ticker fetch: {e}")
+
+    # Sort by volume, take top N
+    symbols = sorted(symbols, key=lambda x: x["quoteVolume"], reverse=True)
+    limit = config.get("symbols_limit", 655)
+    symbols = symbols[:limit]
+
+    strategy_list = config.get("strategies", ["str1", "str2", "str3", "str4"])
+    timeframes = config.get("timeframes", ["5m"])
+    candles_limit = config.get("candles_limit", 250)
+    monitor_limit = config.get("monitor_candles_limit", 250)
+    max_workers = config.get("max_workers", 8)
+
+    eq_state = apply_realized_pnl_to_equity()
+
+    # ===== CANDLE CACHING: Async batch fetch for all symbols =====
+    symbol_names = [s["symbol"] for s in symbols]
+    print(f"[CACHE] Fetching candles for {len(symbol_names)} symbols (async)...")
+
+    cds_cache = await fetch_candles_batch(
+        client, symbol_names, "5m", monitor_limit, max_concurrent=20
+    )
+
+    # Filter out symbols with insufficient data
+    cds_cache = {sym: cds for sym, cds in cds_cache.items() if len(cds) >= 75}
+    print(f"[CACHE] Cached {len(cds_cache)} symbols")
+
+    for strategy_name in strategy_list:
+        # Read risk from config.yaml (source of truth), fallback to strategy module
+        strat_risk_pct = config.get("strategies_dict", {}).get(strategy_name, {}).get("risk_pct")
+        if strat_risk_pct is None:
+            strat_risk_pct = get_strategy_risk_pct(strategy_name)
+        strat_risk_pct = float(strat_risk_pct)
+        strat_risk_usd = eq_state["equity"] * strat_risk_pct
+
+        mod = load_strategy(strategy_name)
+        if not mod:
+            continue
+
+        for tf in timeframes:
+            interval = tf
+
+            with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                futs = []
+                for sym_info in symbols:
+                    sym = sym_info["symbol"]
+                    if sym not in cds_cache:
+                        continue
+                    futs.append(pool.submit(
+                        _scan_symbol, mod, config, strategy_name, tf, interval,
+                        candles_limit, monitor_limit, sym,
+                        eq_state, strat_risk_pct, strat_risk_usd,
+                        bot_token, channel_id, cds_cache[sym]
+                    ))
+                for f in futs:
+                    try:
+                        f.result()
+                    except Exception as e:
+                        print(f"[SCAN ERROR] {e}")
