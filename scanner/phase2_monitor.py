@@ -10,13 +10,13 @@ from concurrent.futures import ThreadPoolExecutor
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from .simulation import simulate_forward_from
-from .phase1_detect import fetch_candles_with_ma
+from .phase1_detect import fetch_candles_with_ma_sync
 from .position_manager import load_pos, update_position, apply_realized_pnl_to_equity
 from notifications.telegram import send_to_telegram
 
 
 def _tp_rr_for(pos):
-    """Get per-strategy TP multiple from get_config()['tp_rr']."""
+    """Get per-strategy TP multiple from get_config()['tp_rr'].""" 
     try:
         mod = importlib.import_module(f"strategies.{pos.get('strategy', 'str3')}")
         cfg = mod.get_config() if hasattr(mod, "get_config") else {}
@@ -33,8 +33,8 @@ def _monitor_symbol(sym, positions, client, bot_token, channel_id):
     
     tf = open_positions[0].get("timeframe", "5m")
     
-    # Fetch candles using shared function
-    cds_full = fetch_candles_with_ma(client, sym, interval=tf, limit=250)
+    # Fetch candles using shared sync wrapper function
+    cds_full = fetch_candles_with_ma_sync(client, sym, interval=tf, limit=250)
     if len(cds_full) < 75:
         return
     

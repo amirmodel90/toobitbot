@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Phase 1: Detect new signals for ToobitBot."""
+import asyncio
 import importlib
 import time
 import threading
@@ -29,9 +30,59 @@ def _strategy_lock(strategy_name):
         return _STRAT_LOCKS[strategy_name]
 
 
-def fetch_candles_with_ma(client, symbol, interval="5m", limit=250):
-    """Fetch klines from Toobit and compute MA21."""
-    raw = client.get_klines(symbol=symbol, interval=interval, limit=limit)
+async def fetch_candles_with_ma(client, symbol, interval="5m", limit=250):
+    """Fetch klines from Toobit (async) and compute MA21."""
+    raw = await client.get_klines(symbol=symbol, interval=interval, limit=limit)
+    cds = []
+    for c in raw:
+        cds.append({
+            "open_time": c[0],
+            "open": float(c[1]),
+            "high": float(c[2]),
+            "low": float(c[3]),
+            "close": float(c[4]),
+            "volume": float(c[5]),
+        })
+    # CRITICAL FIX: Toobit API returns newest-first; strategies expect oldest-first
+    cds = sorted(cds, key=lambda c: c["open_time"])
+    closes = [c["close"] for c in cds]
+    ma21 = [sum(closes[i-20:i+1]) / 21.0 if i >= 20 else None for i in range(len(closes))]
+    for i, c in enumerate(cds):
+        c["ma21"] = ma21[i]
+    return cds
+
+
+async def fetch_candles_batch(client, symbols, interval="5m", limit=250, max_concurrent=20):
+    """Fetch klines for multiple symbols concurrently using async batch."""
+    # Use the client's built-in batch method
+    results = await client.fetch_multiple_klines(symbols, interval, limit, max_concurrent)
+    
+    # Process each result: sort + MA21
+    processed = {}
+    for sym, raw in results.items():
+        cds = []
+        for c in raw:
+            cds.append({
+                "open_time": c[0],
+                "open": float(c[1]),
+                "high": float(c[2]),
+                "low": float(c[3]),
+                "close": float(c[4]),
+                "volume": float(c[5]),
+            })
+        cds = sorted(cds, key=lambda c: c["open_time"])
+        closes = [c["close"] for c in cds]
+        ma21 = [sum(closes[i-20:i+1]) / 21.0 if i >= 20 else None for i in range(len(closes))]
+        for i, c in enumerate(cds):
+            c["ma21"] = ma21[i]
+        processed[sym] = cds
+    return processed
+
+
+def fetch_candles_with_ma_sync(client, symbol, interval="5m", limit=250):
+    """Sync wrapper using requests directly (for multi-threaded compatibility)."""
+    # Use the client's sync session directly to avoid event loop issues
+    raw = client.get_klines_sync(symbol=symbol, interval=interval, limit=limit)
     cds = []
     for c in raw:
         cds.append({
@@ -70,7 +121,7 @@ def find_by_signal_time(sym, stype, open_time):
 
 def get_symbols_with_leverage(client, min_leverage=10):
     """Get USDT-M symbols with leverage > min_leverage."""
-    info = client.get_exchange_info()
+    info = client.get_exchange_info_sync()
     symbols = []
     for c in info.get("contracts", []):
         if c.get("quoteAsset") != "USDT":
@@ -95,9 +146,9 @@ def detect_new_signals(config, bot_token, channel_id, client, scanner_cfg):
     # Get symbols with leverage > min_leverage
     symbols = get_symbols_with_leverage(client, scanner_cfg.get("min_leverage", 10))
     
-    # Get 24hr tickers for volume sorting
+    # Get 24hr tickers for volume sorting (async)
     try:
-        tickers = client.get_24hr_ticker()
+        tickers = client.get_24hr_ticker_sync()
         ticker_map = {t["s"]: float(t.get("qv", 0)) for t in tickers}
         for s in symbols:
             s["quoteVolume"] = ticker_map.get(s["symbol"], 0)
@@ -117,20 +168,23 @@ def detect_new_signals(config, bot_token, channel_id, client, scanner_cfg):
     
     eq_state = apply_realized_pnl_to_equity()
     
-    # ===== CANDLE CACHING: Fetch once per symbol, reuse across all strategies =====
+    # ===== CANDLE CACHING: Async batch fetch for all symbols =====
     symbol_names = [s["symbol"] for s in symbols]
-    print(f"[CACHE] Fetching candles for {len(symbol_names)} symbols...")
-    cds_cache = {}
-    with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        fetch_futs = {pool.submit(fetch_candles_with_ma, client, sym, "5m", monitor_limit): sym for sym in symbol_names}
-        for fut in fetch_futs:
-            sym = fetch_futs[fut]
-            try:
-                cds_full = fut.result()
-                if len(cds_full) >= 75:
-                    cds_cache[sym] = cds_full
-            except Exception as e:
-                print(f"[CACHE ERROR] {sym}: {e}")
+    print(f"[CACHE] Fetching candles for {len(symbol_names)} symbols (async)...")
+    
+    # Run async fetch in event loop
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    cds_cache = loop.run_until_complete(
+        fetch_candles_batch(client, symbol_names, "5m", monitor_limit, max_concurrent=20)
+    )
+    
+    # Filter out symbols with insufficient data
+    cds_cache = {sym: cds for sym, cds in cds_cache.items() if len(cds) >= 75}
     print(f"[CACHE] Cached {len(cds_cache)} symbols")
     
     for strategy_name in strategy_list:
