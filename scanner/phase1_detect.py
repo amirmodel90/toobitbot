@@ -342,6 +342,27 @@ def _scan_symbol(mod, config, strategy_name, tf, interval, limit, monitor_limit,
                 with _POS_LOCK:
                     if find_by_signal_time(sym, stype, open_time):
                         continue
+                    
+                    # ===== MARGIN CHECK: Ensure position fits in available balance =====
+                    # Get max leverage for this symbol
+                    sym_info = next((s for s in symbols if s["symbol"] == sym), None)
+                    max_leverage = sym_info.get("max_leverage", 20) if sym_info else 20
+                    
+                    # Calculate required margin (Cross Margin: notional / leverage)
+                    notional = volume * entry
+                    margin_required = notional / max_leverage
+                    
+                    # Available equity for margin (conservative: 90% of current equity)
+                    available_margin = eq_state["equity"] * 0.9
+                    
+                    if margin_required > available_margin:
+                        # Reduce volume to fit margin
+                        max_volume = (available_margin * max_leverage) / entry
+                        volume = min(volume, max_volume)
+                        # Recalculate risk_usd with adjusted volume
+                        strat_risk_usd = volume * risk
+                        print(f"[MARGIN ADJUST] {sym} volume reduced to {volume:.6f} (margin: ${margin_required:.2f} > ${available_margin:.2f})")
+                    
                     signal_id = next_id()
                     pos = {
                         "signal_id": signal_id, "symbol": sym, "type": stype,
@@ -356,7 +377,9 @@ def _scan_symbol(mod, config, strategy_name, tf, interval, limit, monitor_limit,
                         "equity": round(eq_state["equity"], 2),
                         "risk_pct": round(strat_risk_pct, 4),
                         "risk_usd": round(strat_risk_usd, 2),
-                        "volume": round(strat_risk_usd / risk, 6) if risk > 0 else 0
+                        "volume": round(volume, 6) if risk > 0 else 0,
+                        "leverage_used": max_leverage,
+                        "margin_required": round(margin_required, 2)
                     }
                     positions = load_pos()
                     positions.append(pos)
