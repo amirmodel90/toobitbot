@@ -50,6 +50,8 @@ symbols = symbols[:280]  # Top 280 (or fewer if filter result < 280)
 
 ## Performance Impact
 
-- Per symbol: **~0.33s** (fetch 250 candles + run 1 strategy)
-- Full scan (214 syms × 4 strats): **~5.4 min**
-- Configured scan_interval: **15 min** ✅ (no overlap)
+- Per symbol: **~0.33s** (fetch 250 candles + run 1 strategy) — *sync legacy*
+- **Async fetch (aiohttp): ~0.16s per symbol**
+- Full scan (214 syms × 4 strats): **~5.4 min** — *sync legacy*
+- **Async full scan: ~43s total** (35s fetch + 6s strategies)
+- Configured scan: **Candle-aligned (5m close + 3s)** — no overlap

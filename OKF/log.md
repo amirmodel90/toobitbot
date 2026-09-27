@@ -4,10 +4,17 @@ title: ToobitBot Update Log
 description: Chronological history of changes to the ToobitBot project.
 tags: [log, changelog]
 status: stable
-generated: { by: hermes/2.0, at: 2026-09-22T12:00:00Z }
+generated: { by: hermes/2.0, at: 2026-09-27T07:00:00Z }
 ---
 
 # ToobitBot Update Log
+
+## 2026-09-27
+* **Feat**: Candle-aligned scan loop — runs exactly at 5m candle close (+3s API buffer), removes fixed `scan_interval` config
+* **Feat**: Margin check in position sizing — auto-reduces volume if required margin > 90% available equity
+* **Perf**: Migrated public API endpoints to aiohttp (async HTTP) — 1.84× faster candle fetch, 1.67× overall scan speedup
+* **Perf**: Phase 2 parallel monitoring with shared `fetch_candles_with_ma` — DRY, concurrent symbol monitoring
+* **Perf**: Candle caching across strategies — fetch once per symbol, reuse for all 4 strategies (4× fewer API calls)
 
 ## 2026-09-24
 * **Fix**: Added `sorted(cds, key=lambda c: c["open_time"])` to fix Toobit API reverse-order candles

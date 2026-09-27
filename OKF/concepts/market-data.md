@@ -4,7 +4,7 @@ title: Market Data
 description: How ToobitBot fetches and processes market data from the Toobit API.
 tags: [market-data, api, klines, websocket]
 status: stable
-verified: { by: human:amirmodel90, at: 2026-09-24T17:00:00Z }
+verified: { by: human:amirmodel90, at: 2026-09-27T07:00:00Z }
 sources:
   - id: toobit-api-docs
     resource: https://api-docs.toobit.com/api/usdt-m-market-data.html
@@ -35,11 +35,38 @@ ToobitBot computes MA21 on the close prices:
 ma21[i] = mean(closes[i-20:i+1])  if i >= 20 else None
 ```
 
+**Critical:** Toobit API returns newest-first; ToobitBot sorts to oldest-first:
+```
+cds = sorted(cds, key=lambda c: c["open_time"])
+```
+
 ## 24hr Ticker (Volume Ranking)
 
 `GET /quote/v1/contract/ticker/24hr`
 
 Used to sort symbols by `quoteVolume` for priority scanning.
+
+## Async HTTP (aiohttp) — Since 2026-09-27
+
+Public endpoints use async aiohttp client for 1.84× faster fetch:
+
+| Method | Sync (requests) | Async (aiohttp) |
+|--------|-----------------|-----------------|
+| Candle fetch (215 syms) | 65s (ThreadPool 8) | **35s** (single event loop, 20 concurrent) |
+| Connection pooling | Per-thread Session | Shared TCPConnector(limit=20) |
+| Rate-limit handling | Manual sleep | Semaphore(20) |
+
+**Endpoints using async:**
+- `get_klines` — OHLCV candlesticks
+- `get_exchange_info` — Trading rules & symbols
+- `get_24hr_ticker` — 24hr price stats
+- `get_symbol_price` — Latest price
+- `get_index_price` — Index price
+- `get_risk_limits` — Risk limits
+- `fetch_multiple_klines` — Batch fetch with semaphore
+
+**Endpoints remaining sync (requests):**
+- All private/signed endpoints (account, positions, orders, trading)
 
 ## WebSocket Streams (Future)
 
@@ -50,6 +77,6 @@ For real-time data:
 
 ## Rate Limits
 
-- 3000 request weight per minute
-- 60 orders per 2 seconds
+- REQUEST_WEIGHT: 3000/minute
+- ORDERS: 60/2 seconds
 - Klines endpoint: weight 1
