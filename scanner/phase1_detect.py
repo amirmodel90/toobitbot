@@ -117,6 +117,22 @@ def detect_new_signals(config, bot_token, channel_id, client, scanner_cfg):
     
     eq_state = apply_realized_pnl_to_equity()
     
+    # ===== CANDLE CACHING: Fetch once per symbol, reuse across all strategies =====
+    symbol_names = [s["symbol"] for s in symbols]
+    print(f"[CACHE] Fetching candles for {len(symbol_names)} symbols...")
+    cds_cache = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        fetch_futs = {pool.submit(fetch_candles_with_ma, client, sym, "5m", monitor_limit): sym for sym in symbol_names}
+        for fut in fetch_futs:
+            sym = fetch_futs[fut]
+            try:
+                cds_full = fut.result()
+                if len(cds_full) >= 75:
+                    cds_cache[sym] = cds_full
+            except Exception as e:
+                print(f"[CACHE ERROR] {sym}: {e}")
+    print(f"[CACHE] Cached {len(cds_cache)} symbols")
+    
     for strategy_name in strategy_list:
         # Read risk from config.yaml (source of truth), fallback to strategy module
         strat_risk_pct = config.get("strategies_dict", {}).get(strategy_name, {}).get("risk_pct")
@@ -135,11 +151,14 @@ def detect_new_signals(config, bot_token, channel_id, client, scanner_cfg):
             with ThreadPoolExecutor(max_workers=max_workers) as pool:
                 futs = []
                 for sym_info in symbols:
+                    sym = sym_info["symbol"]
+                    if sym not in cds_cache:
+                        continue
                     futs.append(pool.submit(
                         _scan_symbol, mod, config, strategy_name, tf, interval,
-                        candles_limit, monitor_limit, sym_info["symbol"],
+                        candles_limit, monitor_limit, sym,
                         eq_state, strat_risk_pct, strat_risk_usd,
-                        bot_token, channel_id, client
+                        bot_token, channel_id, cds_cache[sym]
                     ))
                 for f in futs:
                     try:
@@ -150,12 +169,11 @@ def detect_new_signals(config, bot_token, channel_id, client, scanner_cfg):
 
 def _scan_symbol(mod, config, strategy_name, tf, interval, limit, monitor_limit,
                  sym, eq_state, strat_risk_pct, strat_risk_usd,
-                 bot_token, channel_id, client):
-    """Scan single symbol for signals."""
+                 bot_token, channel_id, cds_full):
+    """Scan single symbol for signals using pre-fetched candles."""
     strat_lock = _strategy_lock(strategy_name)
     
     try:
-        cds_full = fetch_candles_with_ma(client, sym, interval=interval, limit=monitor_limit)
         if len(cds_full) < 75:
             return
         
