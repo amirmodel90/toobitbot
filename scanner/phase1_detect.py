@@ -42,6 +42,8 @@ def fetch_candles_with_ma(client, symbol, interval="5m", limit=250):
             "close": float(c[4]),
             "volume": float(c[5]),
         })
+    # CRITICAL FIX: Toobit API returns newest-first; strategies expect oldest-first
+    cds = sorted(cds, key=lambda c: c["open_time"])
     closes = [c["close"] for c in cds]
     ma21 = [sum(closes[i-20:i+1]) / 21.0 if i >= 20 else None for i in range(len(closes))]
     for i, c in enumerate(cds):
@@ -96,7 +98,7 @@ def detect_new_signals(config, bot_token, channel_id, client, scanner_cfg):
     # Get 24hr tickers for volume sorting
     try:
         tickers = client.get_24hr_ticker()
-        ticker_map = {t["symbol"]: float(t.get("quoteVolume", 0)) for t in tickers}
+        ticker_map = {t["s"]: float(t.get("qv", 0)) for t in tickers}
         for s in symbols:
             s["quoteVolume"] = ticker_map.get(s["symbol"], 0)
     except Exception as e:
@@ -116,7 +118,11 @@ def detect_new_signals(config, bot_token, channel_id, client, scanner_cfg):
     eq_state = apply_realized_pnl_to_equity()
     
     for strategy_name in strategy_list:
-        strat_risk_pct = get_strategy_risk_pct(strategy_name)
+        # Read risk from config.yaml (source of truth), fallback to strategy module
+        strat_risk_pct = config.get("strategies_dict", {}).get(strategy_name, {}).get("risk_pct")
+        if strat_risk_pct is None:
+            strat_risk_pct = get_strategy_risk_pct(strategy_name)
+        strat_risk_pct = float(strat_risk_pct)
         strat_risk_usd = eq_state["equity"] * strat_risk_pct
         
         mod = load_strategy(strategy_name)

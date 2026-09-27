@@ -15,7 +15,7 @@ executor:
   receipt: [risk_usd, risk_per_unit, volume]
 attester:
   resource: references/attesters/verify_position_size.py
-generated: { by: hermes/2.0, at: 2026-09-22T12:00:00Z }
+verified: { by: human:amirmodel90, at: 2026-09-24T17:00:00Z }
 ---
 
 # Computation

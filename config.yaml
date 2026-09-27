@@ -18,9 +18,9 @@ scanner:
   min_leverage: 10              # Only symbols with leverage > 10
   candles_limit: 250            # 200 (str4 LOOKBACK) + 50 scan window
   monitor_candles_limit: 250    # For replay
-  scan_interval: 180            # Seconds (3 min)
+  scan_interval: 900            # Seconds (15 min — API slow with 280 symbols × 4 strats = ~7.5 min)
   max_workers: 8                # Thread pool for parallel scan
-  symbols_limit: 655            # Top N symbols by volume (matches min_leverage filter)
+  symbols_limit: 280            # Top 280 symbols by volume (leverage > 10 + volume > 1M)
 
 # Strategies (risk percentages)
 # Risk values set by user: str1=5.25%, str2=7%, str3=3.75%, str4=5.75%
@@ -29,7 +29,7 @@ strategies:
     risk_pct: 0.0525
     enabled: true
   str2:
-    risk_pct: 0.0700
+    risk_pct: 0.07
     enabled: true
   str3:
     risk_pct: 0.0375

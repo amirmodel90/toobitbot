@@ -21,7 +21,7 @@ def send_to_telegram(
     chart_dir.mkdir(parents=True, exist_ok=True)
     
     if generate_chart_fn is None:
-        from .chart_gen import generate_chart
+        from scanner.chart_gen import generate_chart
         generate_chart_fn = generate_chart
     
     cp = generate_chart_fn(pos, cds, state, events, is_update, chart_dir=chart_dir)

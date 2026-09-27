@@ -57,7 +57,8 @@ def monitor_positions(bot_token, channel_id, client):
                     "close": float(c[4]),
                     "volume": float(c[5]),
                 })
-            
+            # CRITICAL FIX: Toobit API returns newest-first; strategies expect oldest-first
+            cds = sorted(cds, key=lambda c: c["open_time"])
             if len(cds) < 75:
                 continue
             

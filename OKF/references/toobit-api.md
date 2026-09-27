@@ -4,7 +4,7 @@ title: Toobit API Reference
 description: All Toobit API endpoints used by ToobitBot, with parameters and response shapes.
 tags: [api, toobit, reference]
 status: stable
-generated: { by: hermes/2.0, at: 2026-09-22T12:00:00Z }
+verified: { by: human:amirmodel90, at: 2026-09-24T17:00:00Z }
 sources:
   - id: toobit-docs
     resource: https://api-docs.toobit.com

@@ -4,7 +4,7 @@ title: Market Data
 description: How ToobitBot fetches and processes market data from the Toobit API.
 tags: [market-data, api, klines, websocket]
 status: stable
-generated: { by: hermes/2.0, at: 2026-09-22T12:00:00Z }
+verified: { by: human:amirmodel90, at: 2026-09-24T17:00:00Z }
 sources:
   - id: toobit-api-docs
     resource: https://api-docs.toobit.com/api/usdt-m-market-data.html

@@ -4,7 +4,7 @@ title: Configuration Schema
 description: Full structure and documentation of config.yaml for ToobitBot.
 tags: [config, yaml, configuration]
 status: stable
-generated: { by: hermes/2.0, at: 2026-09-22T12:00:00Z }
+verified: { by: human:amirmodel90, at: 2026-09-24T17:00:00Z }
 ---
 
 # Config Schema
@@ -30,9 +30,9 @@ scanner:
   min_leverage: 10               # Min leverage filter
   candles_limit: 250             # Candles per fetch
   monitor_candles_limit: 250     # For replay
-  scan_interval: 180             # Seconds between scans
+  scan_interval: 600             # Seconds between scans (10 min)
   max_workers: 8                 # Thread pool size
-  symbols_limit: 655             # Top N by volume
+  symbols_limit: 280             # Top N by volume (leverage > 10 + volume > 1M)
 
 # Strategies
 strategies:

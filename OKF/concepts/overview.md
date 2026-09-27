@@ -4,7 +4,7 @@ title: ToobitBot Overview
 description: Project overview and architecture of the Toobit USDT-M perpetual futures trading bot.
 tags: [overview, architecture]
 status: stable
-generated: { by: hermes/2.0, at: 2026-09-22T12:00:00Z }
+verified: { by: human:amirmodel90, at: 2026-09-24T17:00:00Z }
 ---
 
 # ToobitBot Overview
@@ -27,15 +27,16 @@ main.py (entry point)
   └── strategies/str1-4.py (signal detection logic)
 ```
 
-## Scan Loop (every 3 minutes)
+## Scan Loop (every 10 minutes)
 
-1. Fetch exchange info → filter symbols with leverage > 10
-2. Sort by 24h quote volume → top 655 symbols
+1. Fetch exchange info → filter symbols with leverage > 10 AND 24h volume > 1M USDT
+2. Sort by 24h quote volume → top 280 symbols
 3. For each symbol × each strategy (parallel, 8 workers):
-   - Fetch 250 candles (5m)
+   - Fetch 250 candles (5m) → **sorted(oldest→newest)** for Toobit API
    - Run strategy.detect()
    - Compute SL (per-strategy sl_mode)
    - Compute TP (per-strategy tp_rr)
+   - Apply distance filters (min/max_dist_pct)
    - Result-first replay (simulate exit on closed candles)
    - Save to positions.json
    - Send Telegram notification (chart + caption)
@@ -43,6 +44,8 @@ main.py (entry point)
    - Replay from signal candle
    - Update on state change (TP/SL/BE/MA exit)
    - Send update notification
+
+**Performance:** ~0.33s per symbol, ~71s per strategy, **~5.4 min total for 215 syms × 4 strats**
 
 ## Risk Model
 

@@ -4,7 +4,7 @@ title: Risk Management
 description: Risk model, position sizing, fee structure, and drawdown controls.
 tags: [risk, position-sizing, fees, drawdown]
 status: stable
-generated: { by: hermes/2.0, at: 2026-09-22T12:00:00Z }
+verified: { by: human:amirmodel90, at: 2026-09-24T17:00:00Z }
 ---
 
 # Risk Management

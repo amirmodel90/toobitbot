@@ -4,7 +4,7 @@ title: Notifications
 description: Telegram notification format — chart image and HTML caption for signal and update events.
 tags: [telegram, notification, chart, caption]
 status: stable
-generated: { by: hermes/2.0, at: 2026-09-22T12:00:00Z }
+verified: { by: human:amirmodel90, at: 2026-09-24T17:00:00Z }
 ---
 
 # Notifications

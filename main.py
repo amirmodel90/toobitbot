@@ -62,6 +62,7 @@ def run_scan(config):
     
     scan_config = {
         "strategies": strategy_list,
+        "strategies_dict": config["strategies"],
         "timeframes": scanner_cfg["timeframes"],
         "symbols_limit": scanner_cfg["symbols_limit"],
         "candles_limit": scanner_cfg["candles_limit"],
@@ -100,6 +101,7 @@ def main():
             break
         except Exception as e:
             print(f"[ERROR] {e}")
+            import traceback; traceback.print_exc()
         
         # Sleep until next tick
         print(f"[SLEEP] Next scan in {interval}s...")
