@@ -121,7 +121,10 @@ def find_by_signal_time(sym, stype, open_time):
 
 def get_symbols_with_leverage(client, min_leverage=10):
     """Get USDT-M symbols with leverage > min_leverage."""
+    import time
+    start = time.time()
     info = client.get_exchange_info_sync()
+    print(f"[SYMBOLS] get_exchange_info_sync took {time.time()-start:.1f}s, {len(info.get('contracts', []))} contracts")
     symbols = []
     for c in info.get("contracts", []):
         if c.get("quoteAsset") != "USDT":
@@ -148,7 +151,10 @@ def detect_new_signals(config, bot_token, channel_id, client, scanner_cfg):
     
     # Get 24hr tickers for volume sorting (async)
     try:
+        import time
+        start = time.time()
         tickers = client.get_24hr_ticker_sync()
+        print(f"[SYMBOLS] get_24hr_ticker_sync took {time.time()-start:.1f}s, {len(tickers)} tickers")
         ticker_map = {t["s"]: float(t.get("qv", 0)) for t in tickers}
         for s in symbols:
             s["quoteVolume"] = ticker_map.get(s["symbol"], 0)
@@ -212,7 +218,7 @@ def detect_new_signals(config, bot_token, channel_id, client, scanner_cfg):
                         _scan_symbol, mod, config, strategy_name, tf, interval,
                         candles_limit, monitor_limit, sym,
                         eq_state, strat_risk_pct, strat_risk_usd,
-                        bot_token, channel_id, cds_cache[sym]
+                        bot_token, channel_id, cds_cache[sym], sym_info
                     ))
                 for f in futs:
                     try:
@@ -223,7 +229,7 @@ def detect_new_signals(config, bot_token, channel_id, client, scanner_cfg):
 
 def _scan_symbol(mod, config, strategy_name, tf, interval, limit, monitor_limit,
                  sym, eq_state, strat_risk_pct, strat_risk_usd,
-                 bot_token, channel_id, cds_full):
+                 bot_token, channel_id, cds_full, sym_info=None):
     """Scan single symbol for signals using pre-fetched candles."""
     strat_lock = _strategy_lock(strategy_name)
     
@@ -329,6 +335,10 @@ def _scan_symbol(mod, config, strategy_name, tf, interval, limit, monitor_limit,
                 tp = entry + (risk * tp_rr) if stype == "BUY" else entry - (risk * tp_rr)
                 open_time = cds[full_idx]["open_time"]
                 
+                # Position sizing: risk_usd = equity * risk_pct
+                risk_usd = strat_risk_usd
+                volume = risk_usd / risk if risk > 0 else 0
+                
                 with _POS_LOCK:
                     if find_by_signal_time(sym, stype, open_time):
                         continue
@@ -355,8 +365,7 @@ def _scan_symbol(mod, config, strategy_name, tf, interval, limit, monitor_limit,
                         continue
                     
                     # ===== MARGIN CHECK: Ensure position fits in available balance =====
-                    # Get max leverage for this symbol
-                    sym_info = next((s for s in symbols if s["symbol"] == sym), None)
+                    # Get max leverage for this symbol (from sym_info passed in)
                     max_leverage = sym_info.get("max_leverage", 20) if sym_info else 20
                     
                     # Calculate required margin (Cross Margin: notional / leverage)
@@ -484,7 +493,7 @@ async def detect_new_signals_async(config, bot_token, channel_id, client, scanne
                         _scan_symbol, mod, config, strategy_name, tf, interval,
                         candles_limit, monitor_limit, sym,
                         eq_state, strat_risk_pct, strat_risk_usd,
-                        bot_token, channel_id, cds_cache[sym]
+                        bot_token, channel_id, cds_cache[sym], sym_info
                     ))
                 for f in futs:
                     try:
