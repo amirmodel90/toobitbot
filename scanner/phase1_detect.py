@@ -242,6 +242,17 @@ def _scan_symbol(mod, config, strategy_name, tf, interval, limit, monitor_limit,
         lb = int(cfg.get("lookback", 10))
         scan_start = int(cfg.get("scan_start_idx", max(50, lb)))
         
+        # Determine last closed candle index
+        # Toobit REST API returns only closed candles, but during the 3s buffer
+        # after candle close, the newest candle might be the just-closed one.
+        # Check if last candle is forming (opened < 5 min ago) or closed.
+        now_ms = int(time.time() * 1000)
+        last_candle_open = cds[-1]["open_time"]
+        if now_ms - last_candle_open < 300_000:  # Less than 5 min ago = forming
+            last_closed_idx = len(cds) - 2
+        else:
+            last_closed_idx = len(cds) - 1
+        
         # Precompute indicators
         ind_cache = None
         if hasattr(mod, "compute_indicators"):
